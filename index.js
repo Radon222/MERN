@@ -1,4 +1,5 @@
-import express, { response } from 'express';
+import express from 'express';
+import multer from 'multer';
 
 import mongoose from 'mongoose';
 
@@ -8,12 +9,9 @@ import {
   postCreateValidation,
 } from './validations.js';
 
-import ckeckAuth from './utils/checkAuth.js';
+import { handleValidationErrors, ckeckAuth } from './utils/index.js';
 
-import * as UserController from './controllers/UserController.js';
-import * as PostController from './controllers/PostController.js';
-import checkAuth from './utils/checkAuth.js';
-import UserModel from './models/User.js';
+import { UserController, PostController } from './controllers/index.js';
 
 mongoose
   .connect(
@@ -24,17 +22,58 @@ mongoose
 
 const app = express();
 
-app.use(express.json());
+const storage = multer.diskStorage({
+  destination: (_, __, cb) => {
+    cb(null, 'uploads');
+  },
+  filename: (_, file, cb) => {
+    cb(null, file.originalname);
+  },
+});
 
-app.post('/auth/login', loginValidation, UserController.login);
-app.post('/auth/register', registerValidation, UserController.register);
+const upload = multer({ storage });
+
+app.use(express.json());
+app.use('/uploads', express.static('uploads'));
+
+app.post(
+  '/auth/login',
+  loginValidation,
+  handleValidationErrors,
+  UserController.login
+);
+app.post(
+  '/auth/register',
+  registerValidation,
+  handleValidationErrors,
+  UserController.register
+);
 app.get('/auth/me', ckeckAuth, UserController.getMe);
 
-// app.get('/posts', PostController.getAll);
-// app.get('/posts/:id', PostController.getOne);
-app.post('/posts', checkAuth, postCreateValidation, PostController.create);
-// app.delete('/posts', PostController.remove);
-// app.patch('/posts', PostController.update);
+app.post('/upload', ckeckAuth, upload.single('image'), (req, res) => {
+  res.json({
+    url: `/uploads/${req.file.originalname}`,
+  });
+});
+
+app.get('/posts', PostController.getAll);
+app.get('/posts/:id', PostController.getOne);
+app.post(
+  '/posts',
+  ckeckAuth,
+  postCreateValidation,
+  handleValidationErrors,
+  PostController.create
+);
+app.delete('/posts/:id', ckeckAuth, PostController.remove);
+app.patch(
+  '/posts/:id',
+  ckeckAuth,
+  postCreateValidation,
+  handleValidationErrors,
+  PostController.update
+);
+
 app.listen(4444, err => {
   if (err) {
     return console.log(err);
